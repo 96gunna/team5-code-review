@@ -11,117 +11,90 @@ end
 $post_dict = {}
 $user_dict = {}
 
-# User inputs file paths for post-info.txt and user-info.txt
-# Information from the files are stored in $post_dict and $user_dict global variables
-def read_files
-  post_info = nil
-  user_info = nil
+# Function to read and process post-info.txt or user-info.txt
+def read_file(file_path, dict)
+  begin
+    File.foreach(file_path) do |line|
+      breakdown = line.chomp.split(";")
+      dict[breakdown[0]] = breakdown[1..-1]
+    end
+  rescue Errno::ENOENT
+    puts "#{file_path} not found."
+    return false
+  end
+  true
+end
 
-  puts "Enter post-info file path: "
-  post_info_path = gets.chomp
+# Function to load input data
+def load_input_data
+  loop do
+    puts "Enter post-info file path (or type 'exit' to cancel): "
+    post_info_path = gets.chomp
+    break if post_info_path.downcase == 'exit'
 
-  # Keep prompting the user for input until a file is found
-  until post_info
-    begin
-      post_info = File.open(post_info_path, "r")
-    rescue Errno::ENOENT
-      puts "post-info.txt not found."
-      print "Enter post-info file path: "
-      post_info_path = gets.chomp
-    else
-      # Process each line in the file if successfully opened
-      post_info.each_line do |line|
-        breakdown = line.split(";")
-        $post_dict[breakdown[0]] = { "user" => breakdown[1], "visibility" => breakdown[2] }
-      end
-      post_info.close
+    if read_file(post_info_path, $post_dict)
+      puts "Post info loaded successfully."
+      break
     end
   end
 
-  puts "Enter user-info file path: "
-  user_info_path = gets.chomp
+  loop do
+    puts "Enter user-info file path (or type 'exit' to cancel): "
+    user_info_path = gets.chomp
+    break if user_info_path.downcase == 'exit'
 
-  # Keep prompting again this time for user-info
-  until user_info
-    begin
-      user_info = File.open(user_info_path, "r")
-    rescue Errno::ENOENT
-      puts "user-info.txt not found."
-      print "Enter user-info file path: "
-      user_info_path = gets.chomp
-    else
-      user_info.each_line do |line|
-        breakdown = line.split(";")
-        $user_dict[breakdown[0]] = {
-          "name" => breakdown[1],
-          "location" => breakdown[2],
-          "friends" => breakdown[3][1..-2].split(",")
-        }
-      end
-      user_info.close
+    if read_file(user_info_path, $user_dict)
+      puts "User info loaded successfully."
+      break
     end
   end
 end
 
-# Check if a user can view a specific post
+# Function to check post visibility
 def check_visibility
-  if !$post_dict.empty? && !$user_dict.empty?
-    puts "Enter post ID: "
-    post_id = gets.chomp
-
-    # End if the post_id doesn't exist
-    unless $post_dict.key?(post_id)
-      puts "Post with ID #{post_id} not found."
-      return
-    end
-
-    puts "Enter username: "
-    username = gets.chomp
-
-    # Check post visibility and user's access
-    if $post_dict[post_id]["visibility"] == "public"
-      puts "Access granted"
-    elsif !$user_dict[$post_dict[post_id]["user"]]["friends"].include?(username)
-      puts "Access denied"
-    else
-      puts "Access granted"
-    end
-  else
+  if $post_dict.empty? || $user_dict.empty?
     puts "Files not found. Please load input data first."
+    return
   end
-end
 
-# Search for posts that an inputted username can view
-def search_posts
+  puts "Enter post ID: "
+  post_id = gets.chomp
+
+  unless $post_dict.key?(post_id)
+    puts "Post with ID #{post_id} not found."
+    return
+  end
+
   puts "Enter username: "
   username = gets.chomp
-  posts = []
 
-  $post_dict.each do |post, details|
-    if details["visibility"] == "public" || $user_dict[details["user"]]["friends"].include?(username)
-      posts << post
-    end
+  post = $post_dict[post_id]
+  user = $user_dict[post[0]]
+
+  if post[1] == "public" || user[2].split(",").include?(username)
+    puts "Access granted"
+  else
+    puts "Access denied"
   end
-
-  posts.each { |post| puts post }
 end
 
-# Searches through $user_dict for users with matching locations and outputs their usernames
-def user_by_location
-  puts "Enter location: "
-  location = gets.chomp
-  users = []
-
-  $user_dict.each do |user, details|
-    if details["location"] == location
-      users << user
-    end
+# Function to retrieve posts based on user visibility
+def retrieve_posts(username)
+  posts = $post_dict.select do |post_id, details|
+    details[1] == "public" || $user_dict[details[0]][2].split(",").include?(username)
   end
 
+  posts.keys.each { |post_id| puts post_id }
+end
+
+# Function to search users by location
+def search_users_by_location(location)
+  users = $user_dict.select { |user_id, details| details[1] == location }
+
   if users.empty?
-    puts "No users found."
+    puts "No users found in #{location}."
   else
-    users.each { |user| puts user }
+    users.keys.each { |user_id| puts user_id }
   end
 end
 
@@ -134,13 +107,17 @@ def make_selections
 
     case choice
     when "1"
-      read_files
+      load_input_data
     when "2"
       check_visibility
     when "3"
-      search_posts
+      puts "Enter username: "
+      username = gets.chomp
+      retrieve_posts(username)
     when "4"
-      user_by_location
+      puts "Enter location: "
+      location = gets.chomp
+      search_users_by_location(location)
     when "5"
       puts "Exiting program"
       break
@@ -152,3 +129,4 @@ end
 
 # Call the main function to start the program
 make_selections
+
